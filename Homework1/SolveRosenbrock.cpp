@@ -281,7 +281,7 @@ void Rosenbrock::PrintSolution()
         }
     }
 
-    std::cout << "Solving time: " << running_time_ << " ms\n";
+    std::cout << "Solving time: " << running_time_ << " ms\n\n";
 }
 
 void Rosenbrock::PrintTrajectory()
@@ -317,7 +317,7 @@ void Rosenbrock::PrintTrajectory()
 
 int main()
 {
-    size_t n = 10;
+    size_t n = 2;
     Rosenbrock solver(n);
 
     solver.PrintTrajectory();
@@ -352,6 +352,12 @@ int main()
         plt::title("iteration for N = 2");
         plt::save("iteration.png");
     }
+
+    // n = 10
+    size_t n2 = 10;
+    Rosenbrock solver2(n2);
+
+    solver2.PrintSolution();
 
     return 0;
 }

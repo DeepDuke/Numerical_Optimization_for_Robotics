@@ -9,6 +9,6 @@ include_directories(
     ${PYTHON2.7_INLCUDE_DIRS}
 )
 
-add_executable(Homework1 SolveRosenblock.cpp)
+add_executable(Homework1 SolveRosenbrock.cpp)
 target_include_directories(Homework1 PRIVATE ${PYTHON2_INCLUDE_DIRS})
 target_link_libraries(Homework1 ${PYTHON_LIBRARIES})

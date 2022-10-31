@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+   <node name="rviz" pkg="rviz" type="rviz" output="screen"
+    args="-d $(find curve_generator)/config/global_planning.rviz">
+  </node>
+
+  <node pkg="curve_generator" type="curve_generator" name="curve_generator_node" output="screen">
+    <rosparam file="$(find curve_generator)/config/curve_generator.yaml" command="load" />
+  </node>
+
+</launch>

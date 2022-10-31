@@ -259,7 +259,7 @@ class CubicSpline
     void UpdateGradient()
     {
         // Calc gradients for [x1, x2, ..., x_{n-1}]
-        inner_points_gradients_.setZero(inner_points_num_, 2);
+        inner_points_gradients_.setZero(inner_points_num_, 1);
 
         for(size_t i = 0; i < pieces_num_; ++i)
         {
@@ -313,7 +313,6 @@ class CubicSpline
 
             ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
             ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = " << pieces_num_);
-//            continue ;
 
             auto grad_di = 2 * g1 + g2 + g3;
             auto grad_ci = -3 * g1 - 2 * g2 - g3;
@@ -336,6 +335,12 @@ class CubicSpline
             Eigen::MatrixXd gradient;
             gradient.setZero(inner_points_num_, 2);
             gradient = 24 * (new_grad_di * di) + 12 * (new_grad_ci * di) + 12 * (new_grad_di * ci) + 8 * (new_grad_ci * ci);
+
+            ROS_INFO_STREAM("gradient rows: " << gradient.rows() << ", cols: " << gradient.cols());
+            ROS_INFO_STREAM("inner_points_gradients_ rows: " << inner_points_gradients_.rows() << ", cols: " << inner_points_gradients_.cols());
+
+            // Sum
+            inner_points_gradients_ = inner_points_gradients_ + gradient;
         }
     }
 
@@ -348,7 +353,7 @@ class CubicSpline
     Eigen::Vector2d tail_point_;
     // dimension: (n-1) * 2
     Eigen::MatrixXd inner_points_;
-    // dimension: (n-1) * 2
+    // dimension: (n-1) * 1 gradient for each inner point
     Eigen::MatrixXd inner_points_gradients_;
     // dimension:: (n-1) * (n-1)
     Eigen::MatrixXd A_;

@@ -17,6 +17,7 @@ class CubicSpline
         pieces_num_ = static_cast<size_t>(pieces_num);
 
         // Init matrix A and inverse of A
+        std::cout << "Init matrix A and inverse of A\n";
         inner_points_num_ = pieces_num_ - 1;
         A_.resize(inner_points_num_, inner_points_num_);
         inv_A_.resize(inner_points_num_, inner_points_num_);
@@ -50,6 +51,7 @@ class CubicSpline
         inv_A_ = A_.inverse();
 
         // Get grad_B_ and grad_D_
+        std::cout << "Get grad_B_ and grad_D_\n";
         for (size_t i = 0; i < inner_points_num_; ++i)
         {
             for (size_t j = 0; j < inner_points_num_; ++j)
@@ -77,6 +79,7 @@ class CubicSpline
         grad_D_ = inv_A_ * grad_B_;  // matrix multiplication
 
         // Init grad_1_
+        std::cout << "Init grad_1_\n";
         grad_1_.setZero(pieces_num_, inner_points_num_);
         for (size_t i = 0; i < pieces_num_; ++i)
         {
@@ -94,9 +97,11 @@ class CubicSpline
         }
 
         // Init b_
+        std::cout << "Init b_\n";
         b_.setZero();
 
         // Init gradients size for inner_points: [x1, x2, ..., x_{n-1}]
+        std::cout << "Init gradients size for inner_points\n";
         inner_points_gradients_.resize(inner_points_num_, 2);
         inner_points_gradients_.setZero(inner_points_num_, 2);
     }
@@ -307,18 +312,24 @@ class CubicSpline
     }
 
    private:
+    // n = pieces_num_
     size_t pieces_num_;
+    // inner_points_num_ = n - 1
     size_t inner_points_num_;
     Eigen::Vector2d head_point_;
     Eigen::Vector2d tail_point_;
-    Eigen::Matrix2Xd inner_points_;
-    Eigen::Matrix2Xd inner_points_gradients_;
+    // dimension: (n-1) * 2
+    Eigen::MatrixXd inner_points_;
+    // dimension: (n-1) * 2
+    Eigen::MatrixXd inner_points_gradients_;
+    // dimension:: (n-1) * (n-1)
     Eigen::MatrixXd A_;
     Eigen::MatrixXd inv_A_;
     Eigen::MatrixXd grad_B_;
     Eigen::MatrixXd grad_D_;
     // g1 = d(xi - x_{i+1})/dx, dimension: n*(n-1), n is piece num
     Eigen::MatrixXd grad_1_;
-    Eigen::MatrixX2d b_;
+    // dimension: (n-1) * 2
+    Eigen::MatrixXd b_;
     CubicCurve cubic_curve_;
 };

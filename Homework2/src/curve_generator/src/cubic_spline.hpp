@@ -113,6 +113,8 @@ class CubicSpline
         UpdateMatrixB();
 
         UpdateCubicCurve();
+
+        UpdateGradient();
     }
 
     double GetStretchEnergy() const
@@ -259,14 +261,24 @@ class CubicSpline
         // Calc gradients for [x1, x2, ..., x_{n-1}]
         inner_points_gradients_.setZero(inner_points_num_, 2);
 
-        for(size_t i = 0; i < static_cast<size_t>(cubic_curve_.getPieceNum()); ++i)
+        for(size_t i = 0; i < pieces_num_; ++i)
         {
             const auto& piece = cubic_curve_[i];
             const auto& coef_mat = piece.getCoeffMat();
-            Eigen::Vector2d ci = coef_mat.col(2);
-            Eigen::Vector2d di = coef_mat.col(3);
 
-            assert(ci.size() == di.size());
+            Eigen::VectorXd ci;
+            ci.resize(2);
+            ci(0) = coef_mat(0, 2);
+            ci(1) = coef_mat(1, 2);
+
+            Eigen::VectorXd di;
+            di.resize(2);
+            di(0) = coef_mat(0, 3);
+            di(1) = coef_mat(1, 3);
+
+            assert(ci.size() == 2);
+            assert(di.size() == 2);
+
             /*
              For a piece,
                     gradient = 24 * grad(di)^T * di + 12 * grad(ci)^T * di + 12 * grad(di)^T * ci + 8 * grad(ci)^T * ci
@@ -275,39 +287,55 @@ class CubicSpline
                     grad(di) = 2 * g1 + g2 + g3
                     grad(ci) = -3 * g1 - 2 * g2 - g3
              */
-            Eigen::VectorXd g1 = grad_1_.row(i);
-            Eigen::VectorXd g2 = grad_D_.row(i);
+            Eigen::VectorXd g1 = grad_1_.row(i).transpose();  // grad_1_ dimension: n * (n-1)
 
-            Eigen::VectorXd g3;
-            g3.resize(inner_points_num_);
-            if (i < static_cast<size_t>(cubic_curve_.getPieceNum()) - 1)
+            Eigen::VectorXd g2;  // grad_D_ dimension: (n-1) * (n-1), it stores gradient of from D1 to D_{n-1}
+            if (i == 0)
             {
-                g3 = grad_D_.row(i+1);
+                g2.resize(inner_points_num_);
+                g2.setZero();
             }
             else
             {
+                g2 = grad_D_.row(i-1).transpose();
+            }
+
+            Eigen::VectorXd g3;
+            if (i < pieces_num_ - 1)
+            {
+                g3 = grad_D_.row(i).transpose();
+            }
+            else
+            {
+                g3.resize(inner_points_num_);
                 g3.setZero();
             }
+
+            ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
+            ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = " << pieces_num_);
+//            continue ;
 
             auto grad_di = 2 * g1 + g2 + g3;
             auto grad_ci = -3 * g1 - 2 * g2 - g3;
 
-            Eigen::MatrixX2d new_grad_di;
+            Eigen::MatrixXd new_grad_di;
+            new_grad_di.setZero(inner_points_num_, 2);
             new_grad_di.col(0) = grad_di;
             new_grad_di.col(1) = grad_di;
 
-            Eigen::MatrixX2d new_grad_ci;
+            Eigen::MatrixXd new_grad_ci;
+            new_grad_ci.setZero(inner_points_num_, 2);
             new_grad_ci.col(0) << grad_ci;
             new_grad_ci.col(1) << grad_ci;
 
-            std::cout << "ci.size(): " << ci.size();
-            std::cout << "di.size(): " << di.size();
-            std::cout << "new_grad_ci.size(): " << new_grad_ci.size();
-            std::cout << "new_grad_di.size(): " << new_grad_di.size();
+            ROS_INFO_STREAM("ci rows: " << ci.rows() << ", cols: " << ci.cols());
+            ROS_INFO_STREAM("di rows: " << di.rows() << ", cols: " << di.cols());
+            ROS_INFO_STREAM("new_grad_ci rows: " << new_grad_ci.rows() << ", cols: " << new_grad_ci.cols());
+            ROS_INFO_STREAM("new_grad_di rows: " << new_grad_di.rows() << ", cols: " << new_grad_di.cols());
 
-            Eigen::MatrixX2d gradient;
-//            gradient.setZero(inner_points_num_, 2);
-//            gradient = 24 * new_grad_di * di + 12 * new_grad_ci * di + 12 * new_grad_di * ci + 8 * grad_ci * ci;
+            Eigen::MatrixXd gradient;
+            gradient.setZero(inner_points_num_, 2);
+            gradient = 24 * (new_grad_di * di) + 12 * (new_grad_ci * di) + 12 * (new_grad_di * ci) + 8 * (new_grad_ci * ci);
         }
     }
 

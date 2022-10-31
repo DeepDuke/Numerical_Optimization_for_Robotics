@@ -69,6 +69,7 @@ class PathSmoother
                            const Eigen::Matrix2Xd &iniInPs,
                            const double &relCostTol)
     {
+        cubic_spline.Update(iniInPs);
         double min_cost = 0.0;
         return min_cost;
     }

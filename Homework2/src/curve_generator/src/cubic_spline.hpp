@@ -99,7 +99,6 @@ class CubicSpline
 
         // Init gradients size for inner_points: [x1, x2, ..., x_{n-1}]
         ROS_INFO("Init gradients size for inner_points\n");
-        inner_points_gradients_.resize(inner_points_num_, 2);
         inner_points_gradients_.setZero(inner_points_num_, 2);
     }
 
@@ -132,7 +131,7 @@ class CubicSpline
         return energy;
     }
 
-    Eigen::Matrix2Xd GetGradients()
+    const Eigen::Matrix2Xd& GetGradients()
     {
         return inner_points_gradients_;
     }

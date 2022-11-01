@@ -22,16 +22,32 @@ class PathSmoother
     Eigen::Vector2d head_point_;
     Eigen::Vector2d tail_point_;
     Eigen::Matrix2Xd inner_points_;
-    Eigen::Matrix2Xd inner_points_grad_;
 
     CubicSpline cubic_spline_;
     PotentialFunction potential_function_;
 
    private:
-    static inline double costFunction()
+    double GetCost()
     {
-        double cost = 0.0;
-        return cost;
+        double stretch_energy = cubic_spline_.GetStretchEnergy();
+        double potential_cost = potential_function_.GetCost();
+        return stretch_energy + potential_cost;
+    }
+
+    Eigen::MatrixXd GetGrad()
+    {
+        // dimension: (n-1) * 1
+        Eigen::MatrixXd cubic_spline_grad = cubic_spline_.GetGradients();
+        Eigen::MatrixXd grad1(piece_num_-1, 2);
+        grad1.col(0) = cubic_spline_grad;
+        grad1.col(1) = cubic_spline_grad;
+
+        // dimension: (n-1) * 1
+        Eigen::MatrixXd grad2 = potential_function_.GetGradients();
+
+        Eigen::MatrixXd grad = grad1 + grad2;
+
+        return grad;
     }
 
    public:
@@ -46,7 +62,6 @@ class PathSmoother
           potential_function_(disk_obstacles, penalty_weight, piece_num)
     {
         inner_points_.resize(2, piece_num_ - 1);
-        inner_points_grad_.resize(2, piece_num_ - 1);
     }
 
     double GetPenaltyWeight() { return penalty_weight_; }
@@ -55,9 +70,12 @@ class PathSmoother
 
     Eigen::Matrix3Xd GetDiskObstacle() { return disk_obstacles_; }
 
-    inline double optimize(CubicCurve& curve, const Eigen::Matrix2Xd& iniInPs, const double& relCostTol)
+    inline double optimize(CubicCurve& curve, const Eigen::Matrix2Xd& init_inner_points, const double& rel_cost_tol)
     {
-        cubic_spline_.Update(iniInPs);
+        // Set init inner points
+        cubic_spline_.Update(init_inner_points);
+        potential_function_.Update(init_inner_points);
+
         // Perform Optimization
 
         double min_cost = 0.0;

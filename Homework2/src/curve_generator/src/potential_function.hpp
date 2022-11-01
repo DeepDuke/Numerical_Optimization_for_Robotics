@@ -16,7 +16,7 @@ class PotentialFunction
         grad_.setZero(piece_num_ - 1, 2);
     }
 
-    void UpdateInnerPoints(const Eigen::Matrix2Xd& inner_points)
+    void Update(const Eigen::Matrix2Xd& inner_points)
     {
         // Calculate potential cost and gradient
         cost_ = 0.0;
@@ -50,7 +50,7 @@ class PotentialFunction
 
     double GetCost() { return cost_; }
 
-    const Eigen::MatrixXd& GetGradient() { return grad_; }
+    const Eigen::MatrixXd& GetGradients() { return grad_; }
 
    private:
     // disk shape obstacles in map
@@ -61,6 +61,6 @@ class PotentialFunction
     size_t piece_num_;
     // potential cost
     double cost_;
-    // dimension (n-1) * 1, n is # of pieces
+    // dimension (n-1) * 2, n is # of pieces
     Eigen::MatrixXd grad_;
 };

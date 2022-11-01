@@ -1,12 +1,13 @@
 #pragma once
 
-#include "cubic_spline.hpp"
 #include "L-BFGS.hpp"
+#include "cubic_spline.hpp"
+#include "potential_function.hpp"
 
 #include <Eigen/Eigen>
 
-#include <cmath>
 #include <cfloat>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -15,15 +16,16 @@ namespace path_smoother {
 class PathSmoother
 {
    private:
-    CubicSpline cubic_spline;
+    size_t piece_num_;
+    Eigen::Matrix3Xd disk_obstacles_;
+    double penalty_weight_;
+    Eigen::Vector2d head_point_;
+    Eigen::Vector2d tail_point_;
+    Eigen::Matrix2Xd inner_points_;
+    Eigen::Matrix2Xd inner_points_grad_;
 
-    int pieceN;
-    Eigen::Matrix3Xd diskObstacles;
-    double penaltyWeight;
-    Eigen::Vector2d headP;
-    Eigen::Vector2d tailP;
-    Eigen::Matrix2Xd points;
-    Eigen::Matrix2Xd gradByPoints;
+    CubicSpline cubic_spline_;
+    PotentialFunction potential_function_;
 
    private:
     static inline double costFunction()
@@ -33,47 +35,34 @@ class PathSmoother
     }
 
    public:
-    double GetPenaltyWeight() { return penaltyWeight; }
-
-    CubicSpline& GetCubicSpline()
+    PathSmoother(const Eigen::Vector2d& head_point, const Eigen::Vector2d& tail_point, const int& piece_num,
+                 const Eigen::Matrix3Xd& disk_obstacles, const double penalty_weight)
+        : piece_num_(static_cast<size_t>(piece_num)),
+          disk_obstacles_(disk_obstacles),
+          penalty_weight_(penalty_weight),
+          head_point_(head_point),
+          tail_point_(tail_point),
+          cubic_spline_(head_point, tail_point, piece_num),
+          potential_function_(disk_obstacles, penalty_weight, piece_num)
     {
-        return cubic_spline;
+        inner_points_.resize(2, piece_num_ - 1);
+        inner_points_grad_.resize(2, piece_num_ - 1);
     }
 
-    Eigen::Matrix3Xd GetDiskObstacle()
+    double GetPenaltyWeight() { return penalty_weight_; }
+
+    CubicSpline& GetCubicSpline() { return cubic_spline_; }
+
+    Eigen::Matrix3Xd GetDiskObstacle() { return disk_obstacles_; }
+
+    inline double optimize(CubicCurve& curve, const Eigen::Matrix2Xd& iniInPs, const double& relCostTol)
     {
-        return diskObstacles;
-    }
+        cubic_spline_.Update(iniInPs);
+        // Perform Optimization
 
-    inline bool setup(const Eigen::Vector2d &initialP,
-                      const Eigen::Vector2d &terminalP,
-                      const int &pieceNum,
-                      const Eigen::Matrix3Xd &diskObs,
-                      const double penaWeight)
-    {
-        pieceN = pieceNum;
-        diskObstacles = diskObs;
-        penaltyWeight = penaWeight;
-        headP = initialP;
-        tailP = terminalP;
-
-        cubic_spline.Initialize(initialP, terminalP, pieceNum);
-
-        points.resize(2, pieceN - 1);
-        gradByPoints.resize(2, pieceN - 1);
-
-        return true;
-    }
-
-    inline double optimize(CubicCurve &curve,
-                           const Eigen::Matrix2Xd &iniInPs,
-                           const double &relCostTol)
-    {
-        cubic_spline.Update(iniInPs);
         double min_cost = 0.0;
         return min_cost;
     }
 };
 
-
-} // namespace path_smoother
+}  // namespace path_smoother

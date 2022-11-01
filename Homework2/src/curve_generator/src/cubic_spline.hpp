@@ -1,20 +1,17 @@
 #pragma once
 
+#include "ros/ros.h"
 #include "Eigen/Core"
 #include "cubic_curve.hpp"
 
 class CubicSpline
 {
    public:
-    CubicSpline() = default;
-
-    ~CubicSpline() = default;
-
-    void Initialize(const Eigen::Vector2d& head_point, const Eigen::Vector2d& tail_point, int pieces_num)
+    CubicSpline(const Eigen::Vector2d& head_point, const Eigen::Vector2d& tail_point, size_t pieces_num)
     {
         head_point_ = head_point;
         tail_point_ = tail_point;
-        pieces_num_ = static_cast<size_t>(pieces_num);
+        pieces_num_ = pieces_num;
 
         // Init matrix A and inverse of A
         ROS_INFO("Init matrix A and inverse of A\n");
@@ -106,6 +103,8 @@ class CubicSpline
         inner_points_gradients_.setZero(inner_points_num_, 2);
     }
 
+    ~CubicSpline() = default;
+
     void Update(const Eigen::Matrix2Xd& inner_points)
     {
         UpdateInnerPoints(inner_points);
@@ -133,7 +132,7 @@ class CubicSpline
         return energy;
     }
 
-    const Eigen::Matrix2Xd& GetGradients()
+    Eigen::Matrix2Xd GetGradients()
     {
         return inner_points_gradients_;
     }

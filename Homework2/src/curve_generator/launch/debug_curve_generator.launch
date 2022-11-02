@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <arg name="config_path" value="/home/spacex/melodic_workspace/NumericalOptimziation/Homework2/src/curve_generator/config/curve_generator.yaml"/>
+
+<!--    <node name="rviz" pkg="rviz" type="rviz" output="screen" -->
+<!--     args="-d $(find curve_generator)/config/global_planning.rviz"> -->
+<!--   </node> -->
+
+  <node pkg="curve_generator" type="curve_generator" name="curve_generator_node" output="screen" args="$(arg config_path)" launch-prefix="gdb --args">
+    <rosparam file="$(find curve_generator)/config/curve_generator.yaml" command="load" />
+  </node>
+
+</launch>

@@ -99,7 +99,7 @@ class CubicSpline
 
         // Init gradients size for inner_points: [x1, x2, ..., x_{n-1}]
         ROS_INFO("Init gradients size for inner_points\n");
-        inner_points_gradients_.setZero(inner_points_num_, 2);
+        inner_points_gradients_.setZero(inner_points_num_, 1);
     }
 
     ~CubicSpline() = default;
@@ -131,9 +131,14 @@ class CubicSpline
         return energy;
     }
 
-    const Eigen::Matrix2Xd& GetGradients()
+    Eigen::MatrixXd GetGradients()
     {
         return inner_points_gradients_;
+    }
+
+    CubicCurve GetCurve()
+    {
+        return cubic_curve_;
     }
 
    private:
@@ -309,8 +314,8 @@ class CubicSpline
                 g3.setZero();
             }
 
-            ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
-            ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = " << pieces_num_);
+//            ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
+//            ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = " << pieces_num_);
 
             auto grad_di = 2 * g1 + g2 + g3;
             auto grad_ci = -3 * g1 - 2 * g2 - g3;
@@ -325,17 +330,17 @@ class CubicSpline
             new_grad_ci.col(0) << grad_ci;
             new_grad_ci.col(1) << grad_ci;
 
-            ROS_INFO_STREAM("ci rows: " << ci.rows() << ", cols: " << ci.cols());
-            ROS_INFO_STREAM("di rows: " << di.rows() << ", cols: " << di.cols());
-            ROS_INFO_STREAM("new_grad_ci rows: " << new_grad_ci.rows() << ", cols: " << new_grad_ci.cols());
-            ROS_INFO_STREAM("new_grad_di rows: " << new_grad_di.rows() << ", cols: " << new_grad_di.cols());
+//            ROS_INFO_STREAM("ci rows: " << ci.rows() << ", cols: " << ci.cols());
+//            ROS_INFO_STREAM("di rows: " << di.rows() << ", cols: " << di.cols());
+//            ROS_INFO_STREAM("new_grad_ci rows: " << new_grad_ci.rows() << ", cols: " << new_grad_ci.cols());
+//            ROS_INFO_STREAM("new_grad_di rows: " << new_grad_di.rows() << ", cols: " << new_grad_di.cols());
 
             Eigen::MatrixXd gradient;
             gradient.setZero(inner_points_num_, 2);
             gradient = 24 * (new_grad_di * di) + 12 * (new_grad_ci * di) + 12 * (new_grad_di * ci) + 8 * (new_grad_ci * ci);
 
-            ROS_INFO_STREAM("gradient rows: " << gradient.rows() << ", cols: " << gradient.cols());
-            ROS_INFO_STREAM("inner_points_gradients_ rows: " << inner_points_gradients_.rows() << ", cols: " << inner_points_gradients_.cols());
+//            ROS_INFO_STREAM("gradient rows: " << gradient.rows() << ", cols: " << gradient.cols());
+//            ROS_INFO_STREAM("inner_points_gradients_ rows: " << inner_points_gradients_.rows() << ", cols: " << inner_points_gradients_.cols());
 
             // Sum
             inner_points_gradients_ = inner_points_gradients_ + gradient;

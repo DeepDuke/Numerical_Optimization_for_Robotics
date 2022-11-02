@@ -1,6 +1,6 @@
 #pragma once
 
-#include "L-BFGS.hpp"
+#include "history_buffer.hpp"
 #include "cubic_spline.hpp"
 #include "potential_function.hpp"
 
@@ -25,7 +25,14 @@ class PathSmoother
           head_point_(head_point),
           tail_point_(tail_point),
           cubic_spline_(head_point, tail_point, piece_num),
-          potential_function_(disk_obstacles, penalty_weight, piece_num)
+          potential_function_(disk_obstacles, penalty_weight, piece_num),
+          c1_(1e-4),
+          c2_(0.9),
+          memory_size_(8),
+          epsilon_(1e-3),
+          delta_x_buffer_(memory_size_),
+          delta_g_buffer_(memory_size_),
+          rho_buffer_(memory_size_)
     {
         inner_points_.resize(2, piece_num_ - 1);
     }
@@ -38,12 +45,38 @@ class PathSmoother
 
     inline double optimize(CubicCurve& curve, const Eigen::Matrix2Xd& init_inner_points, const double& rel_cost_tol)
     {
+        ROS_INFO("Starting optimization");
         // Set init inner points
-        UpdateInnerPoints(init_inner_points);
+        epsilon_ = rel_cost_tol;
+        inner_points_ = init_inner_points;
+        UpdateInnerPoints(inner_points_);
 
         // Perform Optimization
+        Eigen::MatrixXd g = GetGrad();
+        Eigen::MatrixXd direction = g;
+        while (g.norm() > epsilon_)
+        {
+            // inner_points_: 2*(n-1), direction: (n-1*2)
+            double t = LewisOvertonLineSearch(inner_points_, direction);
+            auto next_inner_points = inner_points_ + t * direction.transpose();
+            // calc new grad
+            UpdateInnerPoints(next_inner_points);
+            auto next_g = GetGrad();
 
-        double min_cost = 0.0;
+            // update search direction
+            auto delta_g = next_g - g;
+            auto delta_x = next_inner_points - inner_points_;
+            auto next_direction = CautiousLimitedMemoryBFGSUpdate(g, delta_g, delta_x);
+
+            // update g and direction
+            g = next_g;
+            direction = next_direction;
+            inner_points_ = next_inner_points;
+        }
+
+        UpdateInnerPoints(inner_points_);
+        curve = cubic_spline_.GetCurve();
+        double min_cost = GetCost();
         return min_cost;
     }
 
@@ -54,7 +87,7 @@ class PathSmoother
         potential_function_.Update(inner_points);
     }
 
-    double LewisOvertonLineSearch(const Eigen::Matrix2Xd& cur_inner_points, const Eigen::Matrix2Xd& direction)
+    double LewisOvertonLineSearch(const Eigen::Matrix2Xd& cur_inner_points, const Eigen::MatrixXd& direction)
     {
         double L = 0.0;
         double u = std::numeric_limits<double>::max();
@@ -72,8 +105,8 @@ class PathSmoother
             auto grad2 = GetGrad();
 
             // element-wise production
-            auto production1 = (direction.transpose().cwiseProduct(grad1)).sum();
-            auto production2 = (direction.transpose().cwiseProduct(grad2)).sum();
+            auto production1 = (direction.cwiseProduct(grad1)).sum();
+            auto production2 = (direction.cwiseProduct(grad2)).sum();
 
             if (!S_Func(alpha, cost1, cost2, production1))
             {
@@ -107,7 +140,40 @@ class PathSmoother
 
     bool C_Func(double production1, double production2) { return production2 >= c2_ * production1; }
 
-    Eigen::MatrixXd CautiousLimitedMemoryBFGSUpdate() {}
+    Eigen::MatrixXd CautiousLimitedMemoryBFGSUpdate(const Eigen::MatrixXd& g, const Eigen::MatrixXd& delta_g, const Eigen::MatrixXd& delta_x)
+    {
+        // L-BFGS two for loop update
+        auto d = g;
+        auto delta_x_history = delta_x_buffer_.GetHistory();
+        auto delta_g_history = delta_g_buffer_.GetHistory();
+        auto rho_history = rho_buffer_.GetHistory();
+        size_t m = delta_x_history.size();
+        std::vector<double> alpha_history(m, 0.0);
+
+        for (int i = m-1; i >= 0; --i)
+        {
+            auto alpha = rho_history[i] * (delta_x_history[i].transpose().cwiseProduct(d).sum());
+            d = d - alpha * delta_g_history[i];
+            alpha_history[i] = alpha;
+        }
+
+        auto gamma = rho_history[m-1] * delta_g_history[m-1].norm();
+        d = d / gamma;
+
+        for (size_t i = 0; i < m; ++i)
+        {
+            auto beta = rho_history[i] * (delta_g_history[i].cwiseProduct(d).sum());
+            d = d + delta_x_history[i].transpose() * (alpha_history[i] - beta);
+        }
+
+        // Update buffer
+        delta_x_buffer_.AddData(delta_x);
+        delta_g_buffer_.AddData(delta_g);
+        auto rho = 1.0 / (delta_g.transpose().cwiseProduct(delta_x)).sum();
+        rho_buffer_.AddData(rho);
+
+        return d;
+    }
 
     double GetCost()
     {
@@ -119,10 +185,12 @@ class PathSmoother
     Eigen::MatrixXd GetGrad()
     {
         // dimension: (n-1) * 1
-        Eigen::MatrixXd cubic_spline_grad = cubic_spline_.GetGradients();
-        Eigen::MatrixXd grad1(piece_num_ - 1, 2);
-        grad1.col(0) = cubic_spline_grad;
-        grad1.col(1) = cubic_spline_grad;
+        auto cubic_grad = cubic_spline_.GetGradients();
+        ROS_INFO_STREAM("cubic_grad size: row = " << cubic_grad.rows() << " col = " << cubic_grad.cols());
+        // (n-1) * 2
+        Eigen::MatrixXd grad1(piece_num_-1, 2);
+        grad1.col(0) << cubic_grad;
+        grad1.col(1) << cubic_grad;
 
         // dimension: (n-1) * 2
         Eigen::MatrixXd grad2 = potential_function_.GetGradients();
@@ -147,6 +215,15 @@ class PathSmoother
     // coefficient weak Wolfe conditions
     double c1_;
     double c2_;
+    // memory size for L-BFGS
+    size_t memory_size_;
+    // convergence limit
+    double epsilon_;
+
+    // L-BFGS buffer
+    HistoryBuffer<Eigen::MatrixXd> delta_x_buffer_;
+    HistoryBuffer<Eigen::MatrixXd> delta_g_buffer_;
+    HistoryBuffer<double> rho_buffer_;
 };
 
 }  // namespace path_smoother

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ros/ros.h"
 #include "Eigen/Core"
 #include "cubic_curve.hpp"
+#include "ros/ros.h"
 
 class CubicSpline
 {
@@ -28,18 +28,17 @@ class CubicSpline
         {
             for (size_t j = 0; j < inner_points_num_; ++j)
             {
-                if (j < i - bandwidth || j > i + bandwidth)
-                {
-                    A_(i, j) = 0.0;
-                }
-                else if (i == j)
+                if (i == j)
                 {
                     A_(i, j) = 4.0;
                 }
+                else if (j == i - bandwidth || j == i + bandwidth)
+                {
+                    A_(i, j) = 1.0;
+                }
                 else
                 {
-                    // j == i - bandwidth or j == i + bandwidth
-                    A_(i, j) = 1.0;
+                    A_(i, j) = 0.0;
                 }
             }
         }
@@ -53,11 +52,7 @@ class CubicSpline
         {
             for (size_t j = 0; j < inner_points_num_; ++j)
             {
-                if (j < i - bandwidth || j > i + bandwidth)
-                {
-                    grad_B_(i, j) = 0.0;
-                }
-                else if (i == j)
+                if (i == j)
                 {
                     grad_B_(i, j) = 0.0;
                 }
@@ -65,16 +60,22 @@ class CubicSpline
                 {
                     grad_B_(i, j) = -3.0;
                 }
+                else if (j == i + bandwidth)
+                {
+                    grad_B_(i, j) = 3.0;
+                }
                 else
                 {
-                    // j == i + bandwidth
-                    grad_B_(i, j) = 3.0;
+                    grad_B_(i, j) = 0.0;
                 }
             }
         }
 
         grad_D_ = inv_A_ * grad_B_;  // matrix multiplication
-
+        std::cout << "A_ = \n" << A_ << "\n";
+        std::cout << "inv_A_ = \n" << inv_A_ << "\n";
+        std::cout << "grad_B_ = \n" << grad_B_ << "\n";
+        std::cout << "grad_D_ = \n" << grad_D_ << "\n";
         // Init grad_1_
         ROS_INFO("Init grad_1_\n");
         grad_1_.setZero(pieces_num_, inner_points_num_);
@@ -86,13 +87,13 @@ class CubicSpline
                 {
                     grad_1_(i, j) = -1.0;
                 }
-                else if (j < i)
+                else if (j == i - 1)
                 {
                     grad_1_(i, j) = 1.0;
                 }
             }
         }
-
+        std::cout << "grad_1_ = \n" << grad_1_ << "\n";
         // Init b_
         ROS_INFO("Init b_\n");
         b_.setZero();
@@ -119,7 +120,7 @@ class CubicSpline
     {
         // Must be called after Update() function is called
         double energy = 0.0;
-        for(size_t i = 0; i < static_cast<size_t>(cubic_curve_.getPieceNum()); ++i)
+        for (size_t i = 0; i < static_cast<size_t>(cubic_curve_.getPieceNum()); ++i)
         {
             const auto& piece = cubic_curve_[i];
             const auto& coef_mat = piece.getCoeffMat();
@@ -131,15 +132,9 @@ class CubicSpline
         return energy;
     }
 
-    Eigen::MatrixXd GetGradients()
-    {
-        return inner_points_gradients_;
-    }
+    Eigen::MatrixXd GetGradients() { return inner_points_gradients_; }
 
-    CubicCurve GetCurve()
-    {
-        return cubic_curve_;
-    }
+    CubicCurve GetCurve() { return cubic_curve_; }
 
    private:
     void UpdateInnerPoints(const Eigen::Matrix2Xd& inner_points)
@@ -264,7 +259,9 @@ class CubicSpline
         // Calc gradients for [x1, x2, ..., x_{n-1}]
         inner_points_gradients_.setZero(inner_points_num_, 1);
 
-        for(size_t i = 0; i < pieces_num_; ++i)
+        ROS_INFO_STREAM("Initial inner_points_gradients_.norm() --> " << inner_points_gradients_.norm());
+
+        for (size_t i = 0; i < pieces_num_; ++i)
         {
             const auto& piece = cubic_curve_[i];
             const auto& coef_mat = piece.getCoeffMat();
@@ -300,7 +297,7 @@ class CubicSpline
             }
             else
             {
-                g2 = grad_D_.row(i-1).transpose();
+                g2 = grad_D_.row(i - 1).transpose();
             }
 
             Eigen::VectorXd g3;
@@ -314,11 +311,18 @@ class CubicSpline
                 g3.setZero();
             }
 
-//            ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
-//            ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = " << pieces_num_);
+            //            ROS_INFO_STREAM("grad_D_ row_n = " << grad_D_.rows() << ", col_n = " << grad_D_.cols());
+            //            ROS_INFO_STREAM("current index i = [" << i << "/" << pieces_num_ - 1<< "], with piece_num = "
+            //            << pieces_num_);
 
             auto grad_di = 2 * g1 + g2 + g3;
             auto grad_ci = -3 * g1 - 2 * g2 - g3;
+
+            //            std::cout << "g1.norm()=" << g1.norm() << "\n";
+            //            std::cout << "g2.norm()=" << g2.norm() << "\n";
+            //            std::cout << "g3.norm()=" << g3.norm() << "\n";
+            //            std::cout << "grad_ci.norm()=" << grad_ci.norm() << "\n";
+            //            std::cout << "grad_di.norm()=" << grad_di.norm() << "\n";
 
             Eigen::MatrixXd new_grad_di;
             new_grad_di.setZero(inner_points_num_, 2);
@@ -330,20 +334,25 @@ class CubicSpline
             new_grad_ci.col(0) << grad_ci;
             new_grad_ci.col(1) << grad_ci;
 
-//            ROS_INFO_STREAM("ci rows: " << ci.rows() << ", cols: " << ci.cols());
-//            ROS_INFO_STREAM("di rows: " << di.rows() << ", cols: " << di.cols());
-//            ROS_INFO_STREAM("new_grad_ci rows: " << new_grad_ci.rows() << ", cols: " << new_grad_ci.cols());
-//            ROS_INFO_STREAM("new_grad_di rows: " << new_grad_di.rows() << ", cols: " << new_grad_di.cols());
+            //            ROS_INFO_STREAM("ci rows: " << ci.rows() << ", cols: " << ci.cols());
+            //            ROS_INFO_STREAM("di rows: " << di.rows() << ", cols: " << di.cols());
+            //            ROS_INFO_STREAM("new_grad_ci rows: " << new_grad_ci.rows() << ", cols: " <<
+            //            new_grad_ci.cols()); ROS_INFO_STREAM("new_grad_di rows: " << new_grad_di.rows() << ", cols: "
+            //            << new_grad_di.cols());
 
             Eigen::MatrixXd gradient;
             gradient.setZero(inner_points_num_, 2);
-            gradient = 24 * (new_grad_di * di) + 12 * (new_grad_ci * di) + 12 * (new_grad_di * ci) + 8 * (new_grad_ci * ci);
+            gradient =
+                24 * (new_grad_di * di) + 12 * (new_grad_ci * di) + 12 * (new_grad_di * ci) + 8 * (new_grad_ci * ci);
 
-//            ROS_INFO_STREAM("gradient rows: " << gradient.rows() << ", cols: " << gradient.cols());
-//            ROS_INFO_STREAM("inner_points_gradients_ rows: " << inner_points_gradients_.rows() << ", cols: " << inner_points_gradients_.cols());
+            //            ROS_INFO_STREAM("gradient rows: " << gradient.rows() << ", cols: " << gradient.cols());
+            //            ROS_INFO_STREAM("inner_points_gradients_ rows: " << inner_points_gradients_.rows() << ", cols:
+            //            " << inner_points_gradients_.cols());
 
             // Sum
             inner_points_gradients_ = inner_points_gradients_ + gradient;
+            //            ROS_INFO_STREAM("i = " << i << ", inner_points_gradients_.norm() --> " <<
+            //            inner_points_gradients_.norm());
         }
     }
 

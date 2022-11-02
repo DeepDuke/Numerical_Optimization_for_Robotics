@@ -54,8 +54,14 @@ class PathSmoother
         // Perform Optimization
         Eigen::MatrixXd g = GetGrad();
         Eigen::MatrixXd direction = g;
+        int iteration = 0;
+
+        ROS_INFO_STREAM("Before enter while loop g.norm() = " << g.norm() << " | cost --> " << GetCost());
+        std::cout << "while loop condition: "<< static_cast<int>(g.norm() > epsilon_) << "\n";
         while (g.norm() > epsilon_)
         {
+            double cost = GetCost();
+            ROS_INFO_STREAM("iteration#" << iteration << ", cost --> " << cost);
             // inner_points_: 2*(n-1), direction: (n-1*2)
             double t = LewisOvertonLineSearch(inner_points_, direction);
             auto next_inner_points = inner_points_ + t * direction.transpose();
@@ -72,6 +78,7 @@ class PathSmoother
             g = next_g;
             direction = next_direction;
             inner_points_ = next_inner_points;
+            iteration += 1;
         }
 
         UpdateInnerPoints(inner_points_);
@@ -179,6 +186,7 @@ class PathSmoother
     {
         double stretch_energy = cubic_spline_.GetStretchEnergy();
         double potential_cost = potential_function_.GetCost();
+        ROS_INFO_STREAM("stretch_energy --> " << stretch_energy << " | potential_cost --> " << potential_cost);
         return stretch_energy + potential_cost;
     }
 
@@ -192,8 +200,12 @@ class PathSmoother
         grad1.col(0) << cubic_grad;
         grad1.col(1) << cubic_grad;
 
+        ROS_INFO_STREAM("energy grad.norm() --> " << grad1.norm());
+
         // dimension: (n-1) * 2
         Eigen::MatrixXd grad2 = potential_function_.GetGradients();
+
+        ROS_INFO_STREAM("potential grad.norm() --> " << grad2.norm());
 
         // dimension: (n-1) * 2
         Eigen::MatrixXd grad = grad1 + grad2;

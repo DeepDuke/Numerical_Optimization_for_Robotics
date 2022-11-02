@@ -11,6 +11,8 @@ class CubicPolynomial
 {
 private:
     double duration;
+    //  col idx: 0, 1, 2, 3
+    // each col: d, c, b, a
     Eigen::Matrix<double, 2, 4> coeffMat;
 
 public:

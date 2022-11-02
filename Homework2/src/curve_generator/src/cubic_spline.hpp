@@ -123,8 +123,8 @@ class CubicSpline
         {
             const auto& piece = cubic_curve_[i];
             const auto& coef_mat = piece.getCoeffMat();
-            auto ci = coef_mat.col(2);
-            auto di = coef_mat.col(3);
+            auto di = coef_mat.col(0);
+            auto ci = coef_mat.col(1);
             // 12di^T * di + 4ci^T * ci + 12ci^T*di
             energy += 12 * di.squaredNorm() + 4 * ci.squaredNorm() + 12 * (ci(0) * di(0) + ci(1) * di(1));
         }
@@ -218,17 +218,17 @@ class CubicSpline
             auto Di = b_.row(i - 1);
             auto Di_next = b_.row(i);
             // a_i = x_i
-            coef_mat(0, 0) = xi(0);
-            coef_mat(1, 0) = xi(1);
+            coef_mat(0, 3) = xi(0);
+            coef_mat(1, 3) = xi(1);
             // b_i = D_i
-            coef_mat(0, 1) = Di(0);
-            coef_mat(1, 1) = Di(1);
+            coef_mat(0, 2) = Di(0);
+            coef_mat(1, 2) = Di(1);
             // c_i = 3*(x_{i+1} - x_i) - 2*D_i - D_{i+1}
-            coef_mat(0, 2) = 3 * (xi_next(0) - xi(0)) - 2 * Di(0) - Di_next(0);
-            coef_mat(1, 2) = 3 * (xi_next(1) - xi(1)) - 2 * Di(1) - Di_next(1);
+            coef_mat(0, 1) = 3 * (xi_next(0) - xi(0)) - 2 * Di(0) - Di_next(0);
+            coef_mat(1, 1) = 3 * (xi_next(1) - xi(1)) - 2 * Di(1) - Di_next(1);
             // d_i = 2*(x_i - x_{i+1}) + D_i + D_{i+1}
-            coef_mat(0, 3) = 2 * (xi(0) - xi_next(0)) + Di(0) + Di_next(0);
-            coef_mat(1, 3) = 2 * (xi(1) - xi_next(1)) + Di(1) + Di_next(1);
+            coef_mat(0, 0) = 2 * (xi(0) - xi_next(0)) + Di(0) + Di_next(0);
+            coef_mat(1, 0) = 2 * (xi(1) - xi_next(1)) + Di(1) + Di_next(1);
 
             coef_vec.emplace_back(coef_mat);
         }
@@ -269,15 +269,15 @@ class CubicSpline
             const auto& piece = cubic_curve_[i];
             const auto& coef_mat = piece.getCoeffMat();
 
-            Eigen::VectorXd ci;
-            ci.resize(2);
-            ci(0) = coef_mat(0, 2);
-            ci(1) = coef_mat(1, 2);
-
             Eigen::VectorXd di;
             di.resize(2);
-            di(0) = coef_mat(0, 3);
-            di(1) = coef_mat(1, 3);
+            di(0) = coef_mat(0, 0);
+            di(1) = coef_mat(1, 0);
+
+            Eigen::VectorXd ci;
+            ci.resize(2);
+            ci(0) = coef_mat(0, 1);
+            ci(1) = coef_mat(1, 1);
 
             assert(ci.size() == 2);
             assert(di.size() == 2);

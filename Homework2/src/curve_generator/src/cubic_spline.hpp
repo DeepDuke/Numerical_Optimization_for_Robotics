@@ -259,7 +259,7 @@ class CubicSpline
         // Calc gradients for [x1, x2, ..., x_{n-1}]
         inner_points_gradients_.setZero(inner_points_num_, 1);
 
-        ROS_INFO_STREAM("Initial inner_points_gradients_.norm() --> " << inner_points_gradients_.norm());
+        ROS_INFO_STREAM("inner_points_gradients_.norm() --> " << inner_points_gradients_.norm());
 
         for (size_t i = 0; i < pieces_num_; ++i)
         {

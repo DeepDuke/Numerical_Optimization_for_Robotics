@@ -1,7 +1,7 @@
 #pragma once
 
-#include "history_buffer.hpp"
 #include "cubic_spline.hpp"
+#include "history_buffer.hpp"
 #include "potential_function.hpp"
 
 #include <Eigen/Eigen>
@@ -30,6 +30,8 @@ class PathSmoother
           c2_(0.9),
           memory_size_(8),
           epsilon_(1e-3),
+          max_step_(1.0e+20),
+          min_step_(1.0e-20),
           delta_x_buffer_(memory_size_),
           delta_g_buffer_(memory_size_),
           rho_buffer_(memory_size_)
@@ -57,11 +59,11 @@ class PathSmoother
         int iteration = 0;
 
         ROS_INFO_STREAM("Before enter while loop g.norm() = " << g.norm() << " | cost --> " << GetCost());
-        std::cout << "while loop condition: "<< static_cast<int>(g.norm() > epsilon_) << "\n";
+        std::cout << "while loop condition: " << static_cast<int>(g.norm() > epsilon_) << "\n";
         while (g.norm() > epsilon_)
         {
             double cost = GetCost();
-            ROS_INFO_STREAM("iteration#" << iteration << ", cost --> " << cost);
+            ROS_INFO_STREAM("***** iteration #" << iteration << ", cost --> " << cost << "*****");
             // inner_points_: 2*(n-1), direction: (n-1*2)
             double t = LewisOvertonLineSearch(inner_points_, direction);
             auto next_inner_points = inner_points_ + t * direction.transpose();
@@ -97,8 +99,11 @@ class PathSmoother
     double LewisOvertonLineSearch(const Eigen::Matrix2Xd& cur_inner_points, const Eigen::MatrixXd& direction)
     {
         double L = 0.0;
-        double u = std::numeric_limits<double>::max();
+        double u = max_step_;
         double alpha = 1.0;
+        bool brackt = false;
+        bool touched = false;
+        int line_search_iter = 0;
 
         while (true)
         {
@@ -106,7 +111,7 @@ class PathSmoother
             auto cost1 = GetCost();
             auto grad1 = GetGrad();  // Dimension :  (n-1) * 2
 
-            auto new_inner_points = cur_inner_points + alpha * direction;
+            auto new_inner_points = cur_inner_points + alpha * direction.transpose();
             UpdateInnerPoints(new_inner_points);
             auto cost2 = GetCost();
             auto grad2 = GetGrad();
@@ -117,26 +122,50 @@ class PathSmoother
 
             if (!S_Func(alpha, cost1, cost2, production1))
             {
-                u = alpha;
+                L = alpha;
+                brackt = true;
             }
             else if (!C_Func(production1, production2))
             {
-                L = alpha;
+                u = alpha;
             }
             else
             {
-                return alpha;
+                break;
             }
 
-            if (u < std::numeric_limits<double>::max())
+            if (brackt)
             {
                 alpha = (L + u) / 2;
             }
             else
             {
-                alpha = 2 * L;
+                alpha *= 2;
+            }
+
+            if (alpha > max_step_)
+            {
+                if (touched)
+                {
+                    break;
+                }
+                else
+                {
+                    touched = true;
+                    alpha = max_step_;
+                }
+            }
+
+            ROS_INFO_STREAM("***** line_search_iter --> " << line_search_iter << " | alpha --> " << alpha << " *****");
+
+            line_search_iter++;
+            if (line_search_iter >= 64)
+            {
+                break;
             }
         }
+
+        return alpha;
     }
 
     bool S_Func(double alpha, double cost1, double cost2, double production1)
@@ -147,8 +176,15 @@ class PathSmoother
 
     bool C_Func(double production1, double production2) { return production2 >= c2_ * production1; }
 
-    Eigen::MatrixXd CautiousLimitedMemoryBFGSUpdate(const Eigen::MatrixXd& g, const Eigen::MatrixXd& delta_g, const Eigen::MatrixXd& delta_x)
+    Eigen::MatrixXd CautiousLimitedMemoryBFGSUpdate(const Eigen::MatrixXd& g, const Eigen::MatrixXd& delta_g,
+                                                    const Eigen::MatrixXd& delta_x)
     {
+        // Update buffer
+        delta_x_buffer_.AddData(delta_x);
+        delta_g_buffer_.AddData(delta_g);
+        auto rho = 1.0 / (delta_g.transpose().cwiseProduct(delta_x)).sum();
+        rho_buffer_.AddData(rho);
+
         // L-BFGS two for loop update
         auto d = g;
         auto delta_x_history = delta_x_buffer_.GetHistory();
@@ -157,14 +193,14 @@ class PathSmoother
         size_t m = delta_x_history.size();
         std::vector<double> alpha_history(m, 0.0);
 
-        for (int i = m-1; i >= 0; --i)
+        for (int i = m - 1; i >= 0; --i)
         {
             auto alpha = rho_history[i] * (delta_x_history[i].transpose().cwiseProduct(d).sum());
             d = d - alpha * delta_g_history[i];
             alpha_history[i] = alpha;
         }
 
-        auto gamma = rho_history[m-1] * delta_g_history[m-1].norm();
+        auto gamma = rho_history[m - 1] * delta_g_history[m - 1].norm();
         d = d / gamma;
 
         for (size_t i = 0; i < m; ++i)
@@ -172,12 +208,6 @@ class PathSmoother
             auto beta = rho_history[i] * (delta_g_history[i].cwiseProduct(d).sum());
             d = d + delta_x_history[i].transpose() * (alpha_history[i] - beta);
         }
-
-        // Update buffer
-        delta_x_buffer_.AddData(delta_x);
-        delta_g_buffer_.AddData(delta_g);
-        auto rho = 1.0 / (delta_g.transpose().cwiseProduct(delta_x)).sum();
-        rho_buffer_.AddData(rho);
 
         return d;
     }
@@ -196,7 +226,7 @@ class PathSmoother
         auto cubic_grad = cubic_spline_.GetGradients();
         ROS_INFO_STREAM("cubic_grad size: row = " << cubic_grad.rows() << " col = " << cubic_grad.cols());
         // (n-1) * 2
-        Eigen::MatrixXd grad1(piece_num_-1, 2);
+        Eigen::MatrixXd grad1(piece_num_ - 1, 2);
         grad1.col(0) << cubic_grad;
         grad1.col(1) << cubic_grad;
 
@@ -231,6 +261,8 @@ class PathSmoother
     size_t memory_size_;
     // convergence limit
     double epsilon_;
+    double max_step_;
+    double min_step_;
 
     // L-BFGS buffer
     HistoryBuffer<Eigen::MatrixXd> delta_x_buffer_;
